@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitSmart AI - Nutrition Analysis</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8fdf9; font-family: "Inter", sans-serif; }
+    .navbar { background:#ffffff; border-bottom:1px solid #e0e0e0; }
+    .navbar-brand { font-weight:600; color:#0fb15d; }
+    .btn-login { background:#0fb15d; color:#fff; border-radius:6px; padding:6px 16px; }
+
+    .card { border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.05); }
+    .upload-area {
+      border:2px dashed #0fb15d; border-radius:16px; padding:40px; text-align:center;
+      background:#f0f9f4; cursor:pointer; transition:all .3s;
+    }
+    .upload-area:hover, .upload-area.dragover { background:#e6f7ed; }
+    .nutrition-card { background:linear-gradient(135deg, #e6f7ed 0%, #f0f9f4 100%); border:none; }
+    .nutrition-value { font-size:1.5rem; font-weight:700; color:#0fb15d; }
+    .nutrition-label { font-size:.9rem; color:#6c757d; }
+    .food-image { max-width:100%; border-radius:12px; box-shadow:0 4px 8px rgba(0,0,0,0.1); }
+    .flash-container { max-width:980px; margin:16px auto 0; padding:0 12px; }
+
+    .cam-wrap video { width:100%; border-radius:12px; background:#000; }
+    .cam-footer { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .dot {
+      width:10px; height:10px; border-radius:50%;
+      background:#dc3545; display:inline-block; margin-right:6px;
+    }
+    .dot.live { background:#28a745; box-shadow:0 0 0 6px rgba(40,167,69,.15); }
+    .muted { color:#6c757d; }
+    .small-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; }
+    .table thead th { position: sticky; top: 0; background: #fff; z-index: 1; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg px-4">
+    <a class="navbar-brand" href="/">FitSmart AI</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navc">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div id="navc" class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="/assessment">Assessment</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/nutrition">Nutrition</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Progress</a></li>
+      </ul>
+
+      {% if session.user %}
+        <span class="ms-3 fw-bold text-success">Welcome, {{ session.user }}</span>
+        <a href="/logout" class="btn btn-outline-danger ms-3">Logout</a>
+      {% else %}
+        <a href="/login" class="btn btn-login ms-3">Login</a>
+        <a href="/signup" class="btn btn-outline-success ms-2">Register</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <!-- Flash Messages -->
+  <div class="flash-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <div class="container my-5">
+    <div class="row">
+      <div class="col-12 text-center mb-4">
+        <h1 class="fw-bold">Nutrition Analysis</h1>
+        <p class="text-muted">Use your camera for live detection or upload a photo of your food</p>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <!-- Live Camera Column -->
+      <div class="col-lg-6">
+        <div class="card p-4 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">Live Camera</h4>
+            <span class="small-code muted">POST /analyze_nutrition_frame</span>
+          </div>
+
+          <div class="cam-wrap mb-3">
+            <video id="camVideo" playsinline autoplay muted></video>
+            <canvas id="camCanvas" class="d-none"></canvas>
+          </div>
+
+          <div class="cam-footer">
+            <span><span id="liveDot" class="dot"></span><span id="liveText" class="muted">camera off</span></span>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="speakToggle">
+              <label class="form-check-label" for="speakToggle">Speak results</label>
+            </div>
+            <div class="ms-auto">
+              <button id="startBtn" class="btn btn-success me-2">Start Camera</button>
+              <button id="stopBtn" class="btn btn-outline-secondary">Stop</button>
+            </div>
+          </div>
+
+          <div id="liveError" class="alert alert-danger mt-3 d-none"></div>
+
+          <div id="liveResults" class="mt-3 d-none">
+            <h5 class="mb-3">Live Detection</h5>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead>
+                  <tr>
+                    <th>Food Item</th>
+                    <th>Calories</th>
+                    <th>Protein (g)</th>
+                    <th>Carbs (g)</th>
+                    <th>Fat (g)</th>
+                  </tr>
+                </thead>
+                <tbody id="liveItems"></tbody>
+                <tfoot class="table-group-divider">
+                  <tr class="fw-bold">
+                    <td>Total</td>
+                    <td id="liveCal">0</td>
+                    <td id="liveProt">0</td>
+                    <td id="liveCarb">0</td>
+                    <td id="liveFat">0</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Column -->
+      <div class="col-lg-6">
+        <div class="card p-4 h-100">
+          <h4 class="mb-4">Upload Food Image</h4>
+          <form method="POST" action="/analyze_nutrition" enctype="multipart/form-data" id="nutritionForm">
+            <input type="file" id="foodImage" name="food_image" accept="image/*" class="d-none">
+
+            <div class="upload-area mb-3" id="uploadArea" tabindex="0" role="button" aria-label="Upload food image">
+              <div id="uploadPlaceholder">
+                <div class="mb-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="#0fb15d" viewBox="0 0 16 16">
+                    <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                    <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                  </svg>
+                </div>
+                <h5 class="mb-1">Drag & Drop your image here</h5>
+                <p class="text-muted mb-0">or click to browse files</p>
+              </div>
+
+              <div id="filePreview" class="d-none">
+                <div class="mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="#0fb15d" viewBox="0 0 16 16">
+                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                    <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                  </svg>
+                </div>
+                <h5 class="mb-1">File Selected</h5>
+                <p id="fileName" class="text-truncate mb-0"></p>
+                <p class="small text-muted mb-0">Click to change</p>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-success w-100 py-2">Analyze Nutrition</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Static results from upload flow -->
+    <div class="row mt-4">
+      <div class="col-lg-6">
+        {% if food_items %}
+          <div class="card p-4 mb-4">
+            <h4 class="mb-4">Nutrition Analysis Results</h4>
+
+            {% if image_data %}
+            <div class="text-center mb-4">
+              <img src="data:image/jpeg;base64,{{ image_data }}" alt="Uploaded food" class="food-image" style="max-height: 200px;">
+            </div>
+            {% endif %}
+
+            <h5 class="mb-3">Detected Food Items:</h5>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Food Item</th>
+                    <th>Calories</th>
+                    <th>Protein (g)</th>
+                    <th>Carbs (g)</th>
+                    <th>Fat (g)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in food_items %}
+                  <tr>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.calories }}</td>
+                    <td>{{ item.protein }}</td>
+                    <td>{{ item.carbs }}</td>
+                    <td>{{ item.fat }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot class="table-group-divider">
+                  <tr class="fw-bold">
+                    <td>Total</td>
+                    <td>{{ total_calories }}</td>
+                    <td>{{ total_protein }}</td>
+                    <td>{{ total_carbs }}</td>
+                    <td>{{ total_fat }}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div class="card nutrition-card p-4">
+            <h5 class="mb-4">Nutrition Summary</h5>
+            <div class="row text-center">
+              <div class="col-6 col-md-3 mb-3">
+                <div class="nutrition-value">{{ total_calories }}</div>
+                <div class="nutrition-label">Calories</div>
+              </div>
+              <div class="col-6 col-md-3 mb-3">
+                <div class="nutrition-value">{{ total_protein }}g</div>
+                <div class="nutrition-label">Protein</div>
+              </div>
+              <div class="col-6 col-md-3 mb-3">
+                <div class="nutrition-value">{{ total_carbs }}g</div>
+                <div class="nutrition-label">Carbs</div>
+              </div>
+              <div class="col-6 col-md-3 mb-3">
+                <div class="nutrition-value">{{ total_fat }}g</div>
+                <div class="nutrition-label">Fat</div>
+              </div>
+            </div>
+          </div>
+        {% else %}
+          <div class="card p-5 text-center">
+            <div class="mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="#0fb15d" viewBox="0 0 16 16">
+                <path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h13A1.5 1.5 0 0 1 16 1.5v2A1.5 1.5 0 0 1 14.5 5h-13A1.5 1.5 0 0 1 0 3.5v-2zM1.5 1a.5.5 0 0 0-.5.5v2a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5h-13z"/>
+                <path d="M0 8.5A1.5 1.5 0 0 1 1.5 7h13A1.5 1.5 0 0 1 16 8.5v2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 10.5v-2zM1.5 8a.5.5 0 0 0-.5.5v2a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5h-13z"/>
+                <path d="M6 13.5a1.5 1.5 0 0 1 1.5-1.5h1A1.5 1.5 0 0 1 10 13.5v2a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 6 15.5v-2z"/>
+              </svg>
+            </div>
+            <h4 class="text-muted">No Analysis Yet</h4>
+            <p class="text-muted">Use live camera or upload a food image to get nutritional information</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // -------- Upload interactions (unchanged behavior) -----------
+    const uploadArea = document.getElementById('uploadArea');
+    const input = document.getElementById('foodImage');
+    const filePreview = document.getElementById('filePreview');
+    const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+    const fileNameEl = document.getElementById('fileName');
+
+    uploadArea.addEventListener('click', () => input.click());
+    uploadArea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+    });
+
+    input.addEventListener('change', () => {
+      if (input.files && input.files.length > 0) {
+        fileNameEl && (fileNameEl.textContent = input.files[0].name);
+        uploadPlaceholder.classList.add('d-none');
+        filePreview.classList.remove('d-none');
+      } else {
+        uploadPlaceholder.classList.remove('d-none');
+        filePreview.classList.add('d-none');
+      }
+    });
+
+    ['dragenter','dragover','dragleave','drop'].forEach(evt => {
+      uploadArea.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+    });
+    ['dragenter','dragover'].forEach(evt => {
+      uploadArea.addEventListener(evt, () => uploadArea.classList.add('dragover'), false);
+    });
+    ['dragleave','drop'].forEach(evt => {
+      uploadArea.addEventListener(evt, () => uploadArea.classList.remove('dragover'), false);
+    });
+    uploadArea.addEventListener('drop', (e) => {
+      const files = e.dataTransfer.files;
+      if (!files || files.length === 0) return;
+      const dt = new DataTransfer();
+      dt.items.add(files[0]);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change'));
+    });
+
+    // -------- Live Camera Logic -----------
+    const video = document.getElementById('camVideo');
+    const canvas = document.getElementById('camCanvas');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn  = document.getElementById('stopBtn');
+    const liveDot  = document.getElementById('liveDot');
+    const liveText = document.getElementById('liveText');
+    const liveError = document.getElementById('liveError');
+    const speakToggle = document.getElementById('speakToggle');
+
+    const liveResults = document.getElementById('liveResults');
+    const liveItemsTbody = document.getElementById('liveItems');
+    const liveCal = document.getElementById('liveCal');
+    const liveProt = document.getElementById('liveProt');
+    const liveCarb = document.getElementById('liveCarb');
+    const liveFat = document.getElementById('liveFat');
+
+    let mediaStream = null;
+    let loopTimer = null;
+    let inFlight = false;
+    let lastSpoken = "";
+
+    function setLive(on) {
+      liveDot.classList.toggle('live', on);
+      liveText.textContent = on ? 'live' : 'camera off';
+    }
+
+    async function startCamera() {
+      try {
+        liveError.classList.add('d-none');
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        video.srcObject = mediaStream;
+        setLive(true);
+
+        // Start loop
+        if (!loopTimer) {
+          loopTimer = setInterval(captureAndSend, 2000); // every 2s
+        }
+      } catch (err) {
+        liveError.textContent = 'Camera error: ' + err;
+        liveError.classList.remove('d-none');
+        setLive(false);
+      }
+    }
+
+    function stopCamera() {
+      if (loopTimer) { clearInterval(loopTimer); loopTimer = null; }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      video.srcObject = null;
+      setLive(false);
+    }
+
+    async function captureAndSend() {
+      if (!mediaStream || inFlight) return;
+
+      // Prepare frame
+      const track = mediaStream.getVideoTracks()[0];
+      const settings = track.getSettings ? track.getSettings() : {};
+      const w = settings.width || 640;
+      const h = settings.height || 480;
+
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+      inFlight = true;
+      try {
+        const res = await fetch('/analyze_nutrition_frame', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_b64: dataUrl })
+        });
+        const json = await res.json();
+        if (!json.ok) {
+          throw new Error(json.error || 'Unknown error');
+        }
+        renderLive(json);
+      } catch (e) {
+        // Show error non-intrusively, but don't spam
+        console.warn('Live analyze error:', e);
+        liveError.textContent = 'Live analyze error: ' + e.message;
+        liveError.classList.remove('d-none');
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    function renderLive(data) {
+      if (!data || !data.ok) return;
+      if (!data.is_food) {
+        liveResults.classList.remove('d-none');
+        liveItemsTbody.innerHTML = `<tr><td colspan="5" class="text-muted">No food detected</td></tr>`;
+        liveCal.textContent = 0; liveProt.textContent = 0; liveCarb.textContent = 0; liveFat.textContent = 0;
+        return;
+      }
+
+      const items = data.items || [];
+      const totals = data.totals || { calories:0, protein:0, carbs:0, fat:0 };
+
+      // Build rows
+      liveItemsTbody.innerHTML = items.map(it => `
+        <tr>
+          <td>${escapeHtml(it.name ?? "")}</td>
+          <td>${Number(it.calories ?? 0)}</td>
+          <td>${Number(it.protein ?? 0)}</td>
+          <td>${Number(it.carbs ?? 0)}</td>
+          <td>${Number(it.fat ?? 0)}</td>
+        </tr>
+      `).join('') || `<tr><td colspan="5" class="text-muted">No items</td></tr>`;
+
+      liveCal.textContent = Number(totals.calories).toFixed(0);
+      liveProt.textContent = Number(totals.protein).toFixed(1);
+      liveCarb.textContent = Number(totals.carbs).toFixed(1);
+      liveFat.textContent  = Number(totals.fat).toFixed(1);
+
+      liveResults.classList.remove('d-none');
+
+      if (speakToggle.checked) {
+        const phrase = `${Math.round(totals.calories)} calories, ${Math.round(totals.protein)} grams protein, ${Math.round(totals.carbs)} grams carbs, ${Math.round(totals.fat)} grams fat`;
+        if (phrase !== lastSpoken) {
+          speak(phrase);
+          lastSpoken = phrase;
+        }
+      }
+    }
+
+    function speak(text) {
+      try {
+        const synth = window.speechSynthesis;
+        if (!synth) return;
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'en-US';
+        synth.speak(utter);
+      } catch (_) {}
+    }
+
+    function escapeHtml(s) {
+      return (s || "").replace(/[&<>"']/g, (m) => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[m]));
+    }
+
+    // Buttons
+    startBtn.addEventListener('click', startCamera);
+    stopBtn.addEventListener('click', stopCamera);
+
+    // Stop camera when leaving page
+    window.addEventListener('beforeunload', stopCamera);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopCamera();
+    });
+  </script>
+</body>
+</html>
