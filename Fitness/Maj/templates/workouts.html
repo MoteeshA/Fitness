@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jump Counter - No Model Required</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #3a86ff;
+      --success: #38b000;
+      --danger: #d90429;
+      --warning: #ff9e00;
+      --dark: #1a202c;
+      --light: #f8f9fa;
+      --gray: #6b7280;
+    }
+    
+    body {
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      padding: 20px;
+      color: var(--dark);
+    }
+    
+    .container {
+      max-width: 1200px;
+    }
+    
+    .card {
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      border: none;
+      overflow: hidden;
+      transition: transform 0.3s ease;
+    }
+    
+    .card:hover {
+      transform: translateY(-5px);
+    }
+    
+    .card-header {
+      background: linear-gradient(to right, var(--primary), #5a67d8);
+      color: white;
+      font-weight: 600;
+      border-bottom: none;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(to right, var(--primary), #5a67d8);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-weight: 600;
+    }
+    
+    .btn-outline-danger {
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-weight: 600;
+    }
+    
+    .counter {
+      font-size: 3rem;
+      font-weight: 800;
+      color: var(--primary);
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    #videoWrap {
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+      background: #000;
+      position: relative;
+    }
+    
+    #overlay {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+    }
+    
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    
+    .status-active {
+      background-color: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+    
+    .status-inactive {
+      background-color: var(--gray);
+    }
+    
+    .status-error {
+      background-color: var(--danger);
+    }
+    
+    .hud {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 12px 16px;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(2, 6, 23, 0.1);
+      font-weight: 600;
+      z-index: 10;
+    }
+    
+    .sensitivity-control {
+      accent-color: var(--primary);
+    }
+    
+    .progress {
+      height: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+    
+    .jump-animation {
+      animation: jump 0.5s ease;
+    }
+    
+    @keyframes jump {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0); }
+    }
+    
+    .workout-card {
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .workout-card:hover {
+      background-color: #f0f9ff;
+    }
+    
+    .debug-container {
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+    
+    .stats-box {
+      background-color: #f8fafc;
+      border-radius: 12px;
+      padding: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <div class="row mb-5 text-center">
+      <div class="col">
+        <h1 class="display-4 fw-bold mb-3"><i class="fas fa-running me-2"></i>Jump Counter</h1>
+        <p class="lead">Track your jumps without any AI model - just your camera and motion detection</p>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <!-- Left Column: Controls and Stats -->
+      <div class="col-lg-4">
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Controls</h5>
+          </div>
+          <div class="card-body">
+            <div class="d-grid gap-2 d-md-flex mb-4">
+              <button id="startBtn" class="btn btn-primary flex-fill">
+                <i class="fas fa-play-circle me-2"></i>Start
+              </button>
+              <button id="stopBtn" class="btn btn-outline-danger flex-fill" disabled>
+                <i class="fas fa-stop-circle me-2"></i>Stop
+              </button>
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex mb-4">
+              <button id="flipBtn" class="btn btn-outline-primary flex-fill">
+                <i class="fas fa-camera-retro me-2"></i>Flip Camera
+              </button>
+              <button id="resetBtn" class="btn btn-outline-secondary flex-fill">
+                <i class="fas fa-undo me-2"></i>Reset
+              </button>
+            </div>
+            
+            <div class="mb-4">
+              <label class="form-label fw-bold">Sensitivity</label>
+              <input id="sensitivity" type="range" class="form-range sensitivity-control" min="0.6" max="1.8" step="0.05" value="1.1">
+              <div class="d-flex justify-content-between">
+                <small>Low</small>
+                <small id="sensitivityVal">Medium</small>
+                <small>High</small>
+              </div>
+            </div>
+            
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="mirrorMode" checked>
+              <label class="form-check-label" for="mirrorMode">Mirror Video</label>
+            </div>
+            
+            <div class="alert alert-info">
+              <i class="fas fa-info-circle me-2"></i>
+              <small>For best results, ensure good lighting and a clear background.</small>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Statistics</h5>
+          </div>
+          <div class="card-body">
+            <div class="row text-center mb-4">
+              <div class="col">
+                <div class="counter" id="jumpCount">0</div>
+                <div class="text-muted">Total Jumps</div>
+              </div>
+              <div class="col">
+                <div class="fs-2 fw-bold" id="streak">0</div>
+                <div class="text-muted">Current Streak</div>
+              </div>
+            </div>
+            
+            <div class="stats-box">
+              <div class="mb-2">
+                <span class="fw-bold">Status:</span>
+                <span class="float-end badge bg-success" id="liveScore">Ready</span>
+              </div>
+              <div class="mb-2">
+                <span class="fw-bold">Detection Method:</span>
+                <span class="float-end" id="methodInfo">Frame Difference</span>
+              </div>
+              <div class="mb-2">
+                <span class="fw-bold">Last Action:</span>
+                <span class="float-end" id="lastAction">-</span>
+              </div>
+              <div class="mb-2">
+                <span class="fw-bold">Motion Level:</span>
+                <span class="float-end" id="motionLevel">-</span>
+              </div>
+              
+              <div class="mt-3">
+                <div class="d-flex justify-content-between">
+                  <span>Motion Threshold</span>
+                  <span id="thresholdValue">0.04</span>
+                </div>
+                <div class="progress">
+                  <div id="motionBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Center Column: Camera Feed -->
+      <div class="col-lg-5">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-video me-2"></i>Camera Feed</h5>
+          </div>
+          <div class="card-body">
+            <div id="videoWrap">
+              <video id="videoElement" autoplay playsinline muted></video>
+              <canvas id="overlay"></canvas>
+              
+              <div class="hud">
+                <div class="mb-2">
+                  <span class="status-indicator status-inactive" id="statusIndicator"></span>
+                  <span id="detectorStatus">Idle</span>
+                </div>
+                <div class="small text-muted" id="fps">FPS: -</div>
+                <div class="small text-muted" id="resolution">Resolution: -</div>
+              </div>
+            </div>
+            
+            <div class="mt-4">
+              <h6>How to use:</h6>
+              <ul class="list-unstyled">
+                <li><i class="fas fa-check-circle text-success me-2"></i> Click Start and allow camera access</li>
+                <li><i class="fas fa-check-circle text-success me-2"></i> Position yourself in the frame</li>
+                <li><i class="fas fa-check-circle text-success me-2"></i> Start jumping with good form</li>
+                <li><i class="fas fa-check-circle text-success me-2"></i> Adjust sensitivity if needed</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Right Column: Workouts and Debug -->
+      <div class="col-lg-3">
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-dumbbell me-2"></i>Workout Plans</h5>
+          </div>
+          <div class="card-body">
+            <div class="list-group">
+              <a href="#" class="list-group-item list-group-item-action workout-card">
+                <div class="d-flex justify-content-between">
+                  <h6 class="mb-1">Beginner Jump Routine</h6>
+                  <span class="badge bg-success">Easy</span>
+                </div>
+                <small class="text-muted">3 sets of 10 jumps with 60s rest</small>
+              </a>
+              <a href="#" class="list-group-item list-group-item-action workout-card">
+                <div class="d-flex justify-content-between">
+                  <h6 class="mb-1">Cardio Blast</h6>
+                  <span class="badge bg-warning">Medium</span>
+                </div>
+                <small class="text-muted">5 minutes continuous jumping</small>
+              </a>
+              <a href="#" class="list-group-item list-group-item-action workout-card">
+                <div class="d-flex justify-content-between">
+                  <h6 class="mb-1">Advanced Intervals</h6>
+                  <span class="badge bg-danger">Hard</span>
+                </div>
+                <small class="text-muted">30s max jumps, 30s rest - 10 rounds</small>
+              </a>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-bug me-2"></i>Debug Info</h5>
+          </div>
+          <div class="card-body">
+            <div class="debug-container bg-dark text-light p-3 rounded mb-3">
+              <div id="debug">System ready. Click Start to begin.</div>
+            </div>
+            <small class="text-muted">This area shows technical information about the jump detection process.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // DOM elements
+    const video = document.getElementById('videoElement');
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const flipBtn = document.getElementById('flipBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const jumpCountEl = document.getElementById('jumpCount');
+    const liveScore = document.getElementById('liveScore');
+    const debugEl = document.getElementById('debug');
+    const detectorStatus = document.getElementById('detectorStatus');
+    const fpsEl = document.getElementById('fps');
+    const methodInfo = document.getElementById('methodInfo');
+    const lastAction = document.getElementById('lastAction');
+    const streakEl = document.getElementById('streak');
+    const sensitivityEl = document.getElementById('sensitivity');
+    const sensitivityVal = document.getElementById('sensitivityVal');
+    const statusIndicator = document.getElementById('statusIndicator');
+    const motionLevel = document.getElementById('motionLevel');
+    const motionBar = document.getElementById('motionBar');
+    const thresholdValue = document.getElementById('thresholdValue');
+    const mirrorMode = document.getElementById('mirrorMode');
+    const resolutionEl = document.getElementById('resolution');
+
+    // State variables
+    let stream = null;
+    let usingRear = false;
+    let running = false;
+    let rafId = null;
+    let lastFrameTime = performance.now();
+    
+    // Count state
+    let jumpCount = 0;
+    let streak = 0;
+    let lastY = null;
+    let baseline = null;
+    let inAir = false;
+    let lastJumpTime = 0;
+    let emaAlpha = 0.15;
+    let sensitivity = parseFloat(sensitivityEl.value);
+    
+    // Thresholds
+    const BASE_THRESHOLD = 0.04;
+    const MIN_TIME_BETWEEN_JUMPS = 350;
+    
+    // Fallback internal canvases
+    const fbW = 320, fbH = 240;
+    const backCanvas = document.createElement('canvas');
+    backCanvas.width = fbW;
+    backCanvas.height = fbH;
+    const backCtx = backCanvas.getContext('2d');
+    let prevImageData = null;
+    
+    // Helper: log to debug box + console
+    function dbg(...args) {
+      const message = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+      console.log(...args);
+      debugEl.textContent += message + '\n';
+      debugEl.scrollTop = debugEl.scrollHeight;
+      
+      // Keep only the last 10 lines
+      const lines = debugEl.textContent.split('\n');
+      if (lines.length > 10) {
+        debugEl.textContent = lines.slice(-10).join('\n');
+      }
+    }
+    
+    // Resize overlay to video
+    function resizeCanvas() {
+      const w = video.videoWidth || video.clientWidth || 640;
+      const h = video.videoHeight || video.clientHeight || 480;
+      overlay.width = w;
+      overlay.height = h;
+      overlay.style.width = video.clientWidth + 'px';
+      overlay.style.height = video.clientHeight + 'px';
+      
+      // Update resolution display
+      if (w && h) {
+        resolutionEl.textContent = `Resolution: ${w}x${h}`;
+      }
+    }
+    
+    // Update status indicator
+    function updateStatus(status, type) {
+      detectorStatus.textContent = status;
+      statusIndicator.className = 'status-indicator';
+      
+      switch(type) {
+        case 'active':
+          statusIndicator.classList.add('status-active');
+          liveScore.textContent = 'Active';
+          liveScore.className = 'float-end badge bg-success';
+          break;
+        case 'error':
+          statusIndicator.classList.add('status-error');
+          liveScore.textContent = 'Error';
+          liveScore.className = 'float-end badge bg-danger';
+          break;
+        default:
+          statusIndicator.classList.add('status-inactive');
+          liveScore.textContent = 'Ready';
+          liveScore.className = 'float-end badge bg-secondary';
+      }
+    }
+    
+    // Process motion to detect jump
+    function processMotionY(rawY) {
+      if (rawY == null) {
+        updateStatus('No motion detected', 'inactive');
+        motionLevel.textContent = '-';
+        motionBar.style.width = '0%';
+        return;
+      }
+      
+      let normY = rawY;
+      if (normY > 1.2) normY = normY / overlay.height;
+      if (baseline == null) { baseline = normY; lastY = normY; }
+      
+      lastY = (1 - emaAlpha) * lastY + emaAlpha * normY;
+      baseline = (1 - 0.01) * baseline + 0.01 * normY;
+      
+      const disp = baseline - lastY; // positive when moving upward
+      const thresh = BASE_THRESHOLD * sensitivity;
+      
+      // Update motion level display
+      const motionPercent = Math.min(100, Math.max(0, Math.floor(disp * 1000)));
+      motionLevel.textContent = `${motionPercent}%`;
+      motionBar.style.width = `${motionPercent}%`;
+      
+      // Update threshold display
+      thresholdValue.textContent = thresh.toFixed(4);
+      
+      const now = performance.now();
+      
+      if (!inAir && disp > thresh) {
+        inAir = true;
+        lastAction.textContent = 'Takeoff';
+        updateStatus('Jump detected!', 'active');
+        dbg('Takeoff detected');
+      }
+      
+      if (inAir) {
+        if (disp < thresh * 0.35 && (now - lastJumpTime) > MIN_TIME_BETWEEN_JUMPS) {
+          jumpCount++;
+          streak++;
+          jumpCountEl.textContent = jumpCount;
+          streakEl.textContent = streak;
+          lastJumpTime = now;
+          inAir = false;
+          lastAction.textContent = 'Landed';
+          dbg(`Jump counted! Total: ${jumpCount}`);
+          
+          // Animate the counter
+          jumpCountEl.classList.remove('jump-animation');
+          void jumpCountEl.offsetWidth; // Trigger reflow
+          jumpCountEl.classList.add('jump-animation');
+        } else {
+          lastAction.textContent = 'In air';
+        }
+      } else {
+        if (disp < thresh * 0.15) lastAction.textContent = 'Stable';
+      }
+    }
+    
+    // Frame-difference fallback
+    function startFallbackLoop() {
+      methodInfo.textContent = 'Frame Difference';
+      dbg('Starting frame-difference detection');
+      
+      resizeCanvas();
+      prevImageData = null;
+      lastFrameTime = performance.now();
+      
+      const ctx = overlay.getContext('2d');
+      
+      function step() {
+        if (!running) return;
+        
+        // Draw small frame into backCanvas
+        backCtx.drawImage(video, 0, 0, fbW, fbH);
+        const img = backCtx.getImageData(0, 0, fbW, fbH);
+        
+        if (prevImageData) {
+          // Compute motion centroid y
+          let sumY = 0, count = 0;
+          const threshold = 60; // pixel diff threshold
+          
+          for (let i = 0; i < img.data.length; i += 4) {
+            const r = img.data[i], g = img.data[i+1], b = img.data[i+2];
+            const pr = prevImageData.data[i], pg = prevImageData.data[i+1], pb = prevImageData.data[i+2];
+            const diff = Math.abs(r-pr) + Math.abs(g-pg) + Math.abs(b-pb);
+            
+            if (diff > threshold) {
+              const pixelIndex = i/4;
+              const py = Math.floor(pixelIndex / fbW);
+              sumY += py;
+              count++;
+            }
+          }
+          
+          if (count > 50) {
+            const avgY = sumY / count; // 0..fbH
+            const normY = avgY / fbH;
+            processMotionY(normY);
+          } else {
+            // Little movement
+            processMotionY(null);
+            if (baseline != null) baseline = baseline * 0.999 + 0.001 * 0.5;
+          }
+        }
+        
+        prevImageData = img;
+        
+        // Draw preview scaled to overlay
+        ctx.drawImage(video, 0, 0, overlay.width, overlay.height);
+        
+        // Update FPS
+        const now = performance.now();
+        const dt = Math.max(1, now - lastFrameTime);
+        lastFrameTime = now;
+        fpsEl.textContent = 'FPS: ' + Math.round(1000 / dt);
+        
+        rafId = requestAnimationFrame(step);
+      }
+      
+      rafId = requestAnimationFrame(step);
+    }
+    
+    // Start camera
+    async function startCamera() {
+      stopCamera();
+      
+      const facing = usingRear ? 'environment' : 'user';
+      const constraints = {
+        audio: false,
+        video: { 
+          facingMode: { ideal: facing }, 
+          width: { ideal: 640 }, 
+          height: { ideal: 480 } 
+        }
+      };
+      
+      try {
+        updateStatus('Requesting camera...', 'inactive');
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        
+        // Apply mirror mode if needed
+        updateMirrorMode();
+        
+        await video.play();
+        
+        if (video.readyState < 2) {
+          await new Promise(resolve => video.addEventListener('loadedmetadata', resolve, { once: true }));
+        }
+        
+        resizeCanvas();
+        updateStatus('Camera ready', 'active');
+        dbg('Camera started successfully');
+        
+      } catch (e) {
+        dbg('Camera error: ' + e.message);
+        updateStatus('Camera error', 'error');
+        throw e;
+      }
+    }
+    
+    // Stop camera
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        video.srcObject = null;
+      }
+      updateStatus('Camera stopped', 'inactive');
+    }
+    
+    // Update mirror mode based on checkbox
+    function updateMirrorMode() {
+      if (mirrorMode.checked && !usingRear) {
+        video.style.transform = 'scaleX(-1)';
+      } else {
+        video.style.transform = 'none';
+      }
+    }
+    
+    // Start detection
+    async function startAll() {
+      if (running) return;
+      
+      running = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      flipBtn.disabled = false;
+      resetBtn.disabled = false;
+      
+      dbg('Starting jump detection');
+      
+      try {
+        await startCamera();
+        baseline = null;
+        lastY = null;
+        inAir = false;
+        lastFrameTime = performance.now();
+        startFallbackLoop();
+        
+      } catch (e) {
+        dbg('Failed to start: ' + e.message);
+        running = false;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    }
+    
+    // Stop detection
+    function stopAll() {
+      if (!running) return;
+      
+      running = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      
+      stopCamera();
+      updateStatus('Stopped', 'inactive');
+      dbg('Detection stopped');
+    }
+    
+    // Flip camera
+    async function flipCamera() {
+      usingRear = !usingRear;
+      dbg('Switching to ' + (usingRear ? 'rear' : 'front') + ' camera');
+      
+      if (running) {
+        try {
+          await startCamera();
+        } catch (e) {
+          dbg('Flip camera failed: ' + e.message);
+        }
+      }
+      
+      updateMirrorMode();
+    }
+    
+    // Reset counters
+    function resetCounters() {
+      jumpCount = 0;
+      streak = 0;
+      jumpCountEl.textContent = '0';
+      streakEl.textContent = '0';
+      lastAction.textContent = '-';
+      dbg('Counters reset');
+    }
+    
+    // Event listeners
+    startBtn.addEventListener('click', startAll);
+    stopBtn.addEventListener('click', stopAll);
+    flipBtn.addEventListener('click', flipCamera);
+    resetBtn.addEventListener('click', resetCounters);
+    
+    sensitivityEl.addEventListener('input', function() {
+      sensitivity = parseFloat(this.value);
+      
+      // Update sensitivity text
+      if (sensitivity < 1.0) {
+        sensitivityVal.textContent = 'Low';
+      } else if (sensitivity < 1.4) {
+        sensitivityVal.textContent = 'Medium';
+      } else {
+        sensitivityVal.textContent = 'High';
+      }
+      
+      dbg('Sensitivity changed to: ' + sensitivity.toFixed(2));
+    });
+    
+    mirrorMode.addEventListener('change', updateMirrorMode);
+    
+    // Resize overlay on video metadata and window resize
+    window.addEventListener('resize', resizeCanvas);
+    video.addEventListener('loadedmetadata', resizeCanvas);
+    
+    // Page unload cleanup
+    window.addEventListener('beforeunload', stopAll);
+    
+    // Initial messages
+    dbg('Jump Counter initialized');
+    dbg('No model required - using frame difference method');
+    methodInfo.textContent = 'Frame Difference';
+    updateStatus('Ready to start', 'inactive');
+  });
+  </script>
+</body>
+</html>
