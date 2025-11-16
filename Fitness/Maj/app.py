@@ -1,4 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, current_app
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session,
+    jsonify,
+    current_app,
+)
 import sqlite3
 import os
 import base64
@@ -6,6 +16,12 @@ from io import BytesIO
 from PIL import Image
 import json
 import datetime
+
+# ===== Extra imports for Workout Analyzer =====
+import uuid
+import cv2
+import numpy as np
+import mediapipe as mp
 
 # ==== OpenAI ====
 from openai import OpenAI, OpenAIError
@@ -29,6 +45,378 @@ if OPENAI_PROJECT:
     client_kwargs["project"] = OPENAI_PROJECT
 client = OpenAI(**client_kwargs)
 
+# ---------- Workout folders ----------
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+WORKOUT_UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads_workouts")
+WORKOUT_OUTPUT_FOLDER = os.path.join(BASE_DIR, "static", "workouts")
+os.makedirs(WORKOUT_UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(WORKOUT_OUTPUT_FOLDER, exist_ok=True)
+
+# ---------- Mediapipe setup ----------
+mp_drawing = mp.solutions.drawing_utils
+mp_pose = mp.solutions.pose
+
+
+# =========================================================
+# Helper: angle + analyzer functions for workouts
+# =========================================================
+def calculate_angle(a, b, c):
+    """
+    Calculates the angle (in degrees) at point b given three points a, b, c.
+    Each point is (x, y).
+    """
+    a = np.array(a, dtype=np.float32)
+    b = np.array(b, dtype=np.float32)
+    c = np.array(c, dtype=np.float32)
+
+    ba = a - b
+    bc = c - b
+
+    cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-8)
+    cosine_angle = np.clip(cosine_angle, -1.0, 1.0)
+    angle = np.degrees(np.arccos(cosine_angle))
+    return float(angle)
+
+
+def _analyze_pushup(video_path, output_path):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return 0, None
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
+    out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+
+    counter = 0
+    stage = None
+
+    with mp_pose.Pose(min_detection_confidence=0.5,
+                      min_tracking_confidence=0.5) as pose:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image.flags.writeable = False
+            results = pose.process(image)
+
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            try:
+                landmarks = results.pose_landmarks.landmark
+                shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
+                elbow = landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value]
+                wrist = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value]
+
+                shoulder_c = [shoulder.x * w, shoulder.y * h]
+                elbow_c = [elbow.x * w, elbow.y * h]
+                wrist_c = [wrist.x * w, wrist.y * h]
+
+                angle = calculate_angle(shoulder_c, elbow_c, wrist_c)
+
+                if angle > 160:
+                    stage = "up"
+                if angle < 90 and stage == "up":
+                    stage = "down"
+                    counter += 1
+
+                cv2.putText(
+                    image,
+                    f"Elbow angle: {int(angle)}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 0, 255),
+                    2,
+                )
+
+            except Exception:
+                pass
+
+            if results.pose_landmarks:
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.pose_landmarks,
+                    mp_pose.POSE_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(255, 0, 255), thickness=2, circle_radius=2),
+                    mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=2),
+                )
+
+            cv2.putText(
+                image,
+                f"Push-ups: {counter}",
+                (10, h - 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 0, 255),
+                2,
+            )
+
+            out.write(image)
+
+    cap.release()
+    out.release()
+    return counter, output_path
+
+
+def _analyze_squat(video_path, output_path):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return 0, None
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
+    out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+
+    counter = 0
+    stage = None
+
+    with mp_pose.Pose(min_detection_confidence=0.5,
+                      min_tracking_confidence=0.5) as pose:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image.flags.writeable = False
+            results = pose.process(image)
+
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            try:
+                landmarks = results.pose_landmarks.landmark
+                hip = landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value]
+                knee = landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value]
+                ankle = landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value]
+
+                hip_c = [hip.x * w, hip.y * h]
+                knee_c = [knee.x * w, knee.y * h]
+                ankle_c = [ankle.x * w, ankle.y * h]
+
+                angle = calculate_angle(hip_c, knee_c, ankle_c)
+
+                if angle > 160:
+                    stage = "up"
+                if angle < 100 and stage == "up":
+                    stage = "down"
+                    counter += 1
+
+                cv2.putText(
+                    image,
+                    f"Knee angle: {int(angle)}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 0, 255),
+                    2,
+                )
+
+            except Exception:
+                pass
+
+            if results.pose_landmarks:
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.pose_landmarks,
+                    mp_pose.POSE_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(255, 0, 255), thickness=2, circle_radius=2),
+                    mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=2),
+                )
+
+            cv2.putText(
+                image,
+                f"Squats: {counter}",
+                (10, h - 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 0, 255),
+                2,
+            )
+
+            out.write(image)
+
+    cap.release()
+    out.release()
+    return counter, output_path
+
+
+def _analyze_pullup(video_path, output_path):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return 0, None
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
+    out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+
+    counter = 0
+    stage = None
+
+    with mp_pose.Pose(min_detection_confidence=0.5,
+                      min_tracking_confidence=0.5) as pose:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image.flags.writeable = False
+            results = pose.process(image)
+
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            try:
+                landmarks = results.pose_landmarks.landmark
+                shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
+                elbow = landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value]
+                wrist = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value]
+
+                shoulder_c = [shoulder.x * w, shoulder.y * h]
+                elbow_c = [elbow.x * w, elbow.y * h]
+                wrist_c = [wrist.x * w, wrist.y * h]
+
+                angle = calculate_angle(shoulder_c, elbow_c, wrist_c)
+
+                if angle > 150:
+                    stage = "down"
+                if angle < 80 and stage == "down":
+                    stage = "up"
+                    counter += 1
+
+                cv2.putText(
+                    image,
+                    f"Arm angle: {int(angle)}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 0, 255),
+                    2,
+                )
+
+            except Exception:
+                pass
+
+            if results.pose_landmarks:
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.pose_landmarks,
+                    mp_pose.POSE_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(255, 0, 255), thickness=2, circle_radius=2),
+                    mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=2),
+                )
+
+            cv2.putText(
+                image,
+                f"Pull-ups: {counter}",
+                (10, h - 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 0, 255),
+                2,
+            )
+
+            out.write(image)
+
+    cap.release()
+    out.release()
+    return counter, output_path
+
+
+def _analyze_jumping_jack(video_path, output_path):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return 0, None
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
+    out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+
+    counter = 0
+    stage = None
+
+    with mp_pose.Pose(min_detection_confidence=0.5,
+                      min_tracking_confidence=0.5) as pose:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image.flags.writeable = False
+            results = pose.process(image)
+
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            try:
+                landmarks = results.pose_landmarks.landmark
+                l_ankle = landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value]
+                r_ankle = landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value]
+
+                l_wrist = landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value]
+                r_wrist = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value]
+
+                # distances in pixels
+                feet_dist = abs((l_ankle.x - r_ankle.x) * w)
+                hands_dist = abs((l_wrist.y - r_wrist.y) * h)
+
+                if feet_dist < 0.1 * w and hands_dist > 0.6 * h:
+                    stage = "down"  # arms down, feet together
+                if feet_dist > 0.2 * w and hands_dist < 0.4 * h and stage == "down":
+                    stage = "up"
+                    counter += 1
+
+                cv2.putText(
+                    image,
+                    f"Jacks: {counter}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 0, 255),
+                    2,
+                )
+
+            except Exception:
+                pass
+
+            if results.pose_landmarks:
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.pose_landmarks,
+                    mp_pose.POSE_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(255, 0, 255), thickness=2, circle_radius=2),
+                    mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=2),
+                )
+
+            cv2.putText(
+                image,
+                f"Jumping Jacks: {counter}",
+                (10, h - 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 0, 255),
+                2,
+            )
+
+            out.write(image)
+
+    cap.release()
+    out.release()
+    return counter, output_path
+
 
 # --- Database Setup ---
 def init_db():
@@ -41,7 +429,8 @@ def init_db():
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
         # users table
-        c.execute("""
+        c.execute(
+            """
         CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -49,9 +438,11 @@ def init_db():
             phone TEXT NOT NULL,
             password TEXT NOT NULL
         )
-        """)
+        """
+        )
         # logs table for assessments and nutrition
-        c.execute("""
+        c.execute(
+            """
         CREATE TABLE logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -60,9 +451,11 @@ def init_db():
             data TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
-        """)
+        """
+        )
         conn.commit()
         conn.close()
+
 
 init_db()
 
@@ -110,7 +503,9 @@ def login():
 
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE email=? AND password=?", (email, password))
+        c.execute(
+            "SELECT * FROM users WHERE email=? AND password=?", (email, password)
+        )
         user = c.fetchone()
         conn.close()
 
@@ -138,7 +533,7 @@ def signup():
             c = conn.cursor()
             c.execute(
                 "INSERT INTO users (name, email, phone, password) VALUES (?,?,?,?)",
-                (name, email, phone, password)
+                (name, email, phone, password),
             )
             conn.commit()
             conn.close()
@@ -186,40 +581,42 @@ def build_result_from_inputs(height, weight, status=None, score=None):
             "Increase calorie intake with nutrient-rich foods",
             "Add strength training exercises",
             "Eat protein-rich snacks",
-            "Ensure 7-8 hours of sleep"
+            "Ensure 7-8 hours of sleep",
         ],
         "Fit": [
             "Maintain current workout routine",
             "Continue balanced diet",
             "Stay hydrated with 8-10 glasses of water",
-            "Incorporate flexibility training like yoga"
+            "Incorporate flexibility training like yoga",
         ],
         "Overweight": [
             "Incorporate 30 minutes of cardio daily",
             "Reduce processed sugar and fried foods",
             "Add high-protein meals to diet",
-            "Walk at least 8,000 steps daily"
+            "Walk at least 8,000 steps daily",
         ],
         "Obese": [
             "Consult a fitness coach for tailored program",
             "Start with low-impact cardio (walking, swimming)",
             "Gradually reduce portion sizes",
-            "Increase vegetable intake significantly"
+            "Increase vegetable intake significantly",
         ],
-        "Unknown": [
-            "Provide valid height and weight for assessment."
-        ]
+        "Unknown": ["Provide valid height and weight for assessment."],
     }
 
     recommendations = rec_map.get(status, ["Maintain a healthy lifestyle."])
-    summary = f"Your BMI is {bmi}. Status: {status}. Recommended: {len(recommendations)} actions." if bmi is not None else "Invalid inputs."
+    summary = (
+        f"Your BMI is {bmi}. Status: {status}. Recommended: {len(recommendations)} actions."
+        if bmi is not None
+        else "Invalid inputs."
+    )
 
     return {
         "status": status,
         "bmi": bmi,
         "score": score,
         "recommendations": recommendations,
-        "summary": summary
+        "summary": summary,
     }
 
 
@@ -255,7 +652,12 @@ def assessment():
                     c = conn.cursor()
                     c.execute(
                         "INSERT INTO logs (user_id, date, type, data) VALUES (?,?,?,?)",
-                        (user_id, datetime.date.today().isoformat(), "assessment", json.dumps(assessment_obj))
+                        (
+                            user_id,
+                            datetime.date.today().isoformat(),
+                            "assessment",
+                            json.dumps(assessment_obj),
+                        ),
                     )
                     conn.commit()
                     conn.close()
@@ -271,7 +673,10 @@ def assessment():
         try:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
-            c.execute("SELECT date, type, data FROM logs WHERE user_id=? ORDER BY date DESC", (user_id,))
+            c.execute(
+                "SELECT date, type, data FROM logs WHERE user_id=? ORDER BY date DESC",
+                (user_id,),
+            )
             rows = c.fetchall()
             conn.close()
             logs = [{"date": r[0], "type": r[1], "data": json.loads(r[2])} for r in rows]
@@ -315,7 +720,12 @@ def run_assessment():
             c = conn.cursor()
             c.execute(
                 "INSERT INTO logs (user_id, date, type, data) VALUES (?,?,?,?)",
-                (user_id, datetime.date.today().isoformat(), "assessment", json.dumps(assessment_obj))
+                (
+                    user_id,
+                    datetime.date.today().isoformat(),
+                    "assessment",
+                    json.dumps(assessment_obj),
+                ),
             )
             conn.commit()
             conn.close()
@@ -330,10 +740,15 @@ def run_assessment():
         if uid:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
-            c.execute("SELECT date, type, data FROM logs WHERE user_id=? ORDER BY date DESC", (uid,))
+            c.execute(
+                "SELECT date, type, data FROM logs WHERE user_id=? ORDER BY date DESC",
+                (uid,),
+            )
             rows = c.fetchall()
             conn.close()
-            logs = [{"date": r[0], "type": r[1], "data": json.loads(r[2])} for r in rows]
+            logs = [
+                {"date": r[0], "type": r[1], "data": json.loads(r[2])} for r in rows
+            ]
 
         return render_template("assessment.html", assessment=assessment_obj, logs=logs)
 
@@ -379,7 +794,7 @@ def _vision_call_with_model(model_name, img_b64):
     """
     prompt = (
         "You are a nutrition expert. Look at the food photo and respond ONLY as strict JSON with this schema: "
-        "{\"is_food\": true|false, \"items\": [{\"name\": string, \"calories\": integer, \"protein\": number, \"carbs\": number, \"fat\": number}]}"
+        '{"is_food": true|false, "items": [{"name": string, "calories": integer, "protein": number, "carbs": number, "fat": number}]}'
     )
 
     return client.chat.completions.create(
@@ -391,7 +806,10 @@ def _vision_call_with_model(model_name, img_b64):
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
+                    },
                 ],
             },
         ],
@@ -404,7 +822,11 @@ def _try_models_with_image_b64(img_b64):
     """Try configured model, then fallback; return parsed JSON dict."""
     if not OPENAI_API_KEY:
         raise OpenAIError("OpenAI key not set on server. Set OPENAI_API_KEY.")
-    models_to_try = [VISION_MODEL, "gpt-4o"] if VISION_MODEL != "gpt-4o" else ["gpt-4o", "gpt-4o-mini"]
+    models_to_try = (
+        [VISION_MODEL, "gpt-4o"]
+        if VISION_MODEL != "gpt-4o"
+        else ["gpt-4o", "gpt-4o-mini"]
+    )
     last_err = None
     for m in models_to_try:
         try:
@@ -468,14 +890,19 @@ def analyze_nutrition():
                     "calories": total_calories,
                     "protein": total_protein,
                     "carbs": total_carbs,
-                    "fat": total_fat
-                }
+                    "fat": total_fat,
+                },
             }
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
             c.execute(
                 "INSERT INTO logs (user_id, date, type, data) VALUES (?,?,?,?)",
-                (user_id, datetime.date.today().isoformat(), "nutrition", json.dumps(log_payload))
+                (
+                    user_id,
+                    datetime.date.today().isoformat(),
+                    "nutrition",
+                    json.dumps(log_payload),
+                ),
             )
             conn.commit()
             conn.close()
@@ -489,7 +916,7 @@ def analyze_nutrition():
             total_protein=total_protein,
             total_carbs=total_carbs,
             total_fat=total_fat,
-            image_data=img_b64
+            image_data=img_b64,
         )
 
     except OpenAIError as e:
@@ -498,7 +925,7 @@ def analyze_nutrition():
             flash(
                 "OpenAI API error: model access denied. "
                 "Either switch to a user-scoped API key (sk-…) or enable the model for your project in the Dashboard → Projects → Models.",
-                "danger"
+                "danger",
             )
         else:
             flash(f"OpenAI API error: {e}", "danger")
@@ -525,7 +952,19 @@ def analyze_nutrition_frame():
         data = _try_models_with_image_b64(img_b64)
 
         if not data.get("is_food"):
-            return jsonify({"ok": True, "is_food": False, "items": [], "totals": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}})
+            return jsonify(
+                {
+                    "ok": True,
+                    "is_food": False,
+                    "items": [],
+                    "totals": {
+                        "calories": 0,
+                        "protein": 0,
+                        "carbs": 0,
+                        "fat": 0,
+                    },
+                }
+            )
 
         items = data.get("items", []) or []
         totals = {
@@ -539,10 +978,12 @@ def analyze_nutrition_frame():
     except OpenAIError as e:
         msg = str(e)
         if "model_not_found" in msg or "does not have access" in msg or "403" in msg:
-            return jsonify({
-                "ok": False,
-                "error": "OpenAI model access denied. Switch to a user-scoped API key (sk-…) or enable the model for your Project."
-            }), 403
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "OpenAI model access denied. Switch to a user-scoped API key (sk-…) or enable the model for your Project.",
+                }
+            ), 403
         return jsonify({"ok": False, "error": f"OpenAI error: {e}"}), 500
     except Exception as e:
         return jsonify({"ok": False, "error": f"Server error: {e}"}), 500
@@ -559,7 +1000,10 @@ def progress():
         try:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
-            c.execute("SELECT date, type, data FROM logs WHERE user_id=? ORDER BY date ASC", (user_id,))
+            c.execute(
+                "SELECT date, type, data FROM logs WHERE user_id=? ORDER BY date ASC",
+                (user_id,),
+            )
             rows = c.fetchall()
             conn.close()
 
@@ -568,7 +1012,13 @@ def progress():
                 logs.append({"date": d, "type": t, "data": parsed})
                 if t == "assessment":
                     # include date and bmi/score if present for charting
-                    series["assessments"].append({"date": d, "bmi": parsed.get("bmi"), "score": parsed.get("score")})
+                    series["assessments"].append(
+                        {
+                            "date": d,
+                            "bmi": parsed.get("bmi"),
+                            "score": parsed.get("score"),
+                        }
+                    )
                 elif t == "nutrition":
                     totals = parsed.get("totals") or {}
                     series["nutrition"].append({"date": d, "totals": totals})
@@ -578,21 +1028,122 @@ def progress():
     return render_template("progress.html", logs=logs, series=series)
 
 
-# ------- WORKOUTS ROUTE (ADDED to fix your BuildError) -------
+# ------- WORKOUTS ROUTE (shows page) -------
 @app.route("/workouts", methods=["GET"])
 def workouts():
     """
-    Minimal workouts page so url_for('workouts') resolves in templates.
-    Replace the template content with your actual workouts UI when ready.
+    Workouts page so url_for('workouts') resolves in templates.
     """
-    # If you want to show user-specific workouts, fetch them here using get_current_user_id()
     user_id = get_current_user_id()
     sample_workouts = [
         {"title": "Full Body Strength", "duration": "45 min", "level": "Intermediate"},
         {"title": "Morning Yoga Flow", "duration": "30 min", "level": "Beginner"},
         {"title": "HIIT Cardio Blast", "duration": "20 min", "level": "Advanced"},
     ]
-    return render_template("workouts.html", workouts=sample_workouts, user_id=user_id)
+    return render_template(
+        "workouts.html",
+        workouts=sample_workouts,
+        user_id=user_id,
+        selected_workout=None,
+        video_url=None,
+        reps=None,
+        error=None,
+    )
+
+
+# ------- NEW: WORKOUT UPLOAD + ANALYSIS ROUTE -------
+@app.route("/upload_workout", methods=["POST"])
+def upload_workout():
+    """
+    Handles the form in workouts.html:
+    - Reads workout_type and video file
+    - Runs the appropriate analyzer
+    - Renders workouts.html with annotated video + rep count
+    """
+    user_id = get_current_user_id()
+    sample_workouts = [
+        {"title": "Full Body Strength", "duration": "45 min", "level": "Intermediate"},
+        {"title": "Morning Yoga Flow", "duration": "30 min", "level": "Beginner"},
+        {"title": "HIIT Cardio Blast", "duration": "20 min", "level": "Advanced"},
+    ]
+
+    if "video" not in request.files:
+        error = "No video uploaded!"
+        return render_template(
+            "workouts.html",
+            workouts=sample_workouts,
+            user_id=user_id,
+            selected_workout=None,
+            video_url=None,
+            reps=None,
+            error=error,
+        )
+
+    video_file = request.files["video"]
+    workout_type = request.form.get("workout_type", "pushup")
+
+    if video_file.filename.strip() == "":
+        error = "No file selected!"
+        return render_template(
+            "workouts.html",
+            workouts=sample_workouts,
+            user_id=user_id,
+            selected_workout=workout_type,
+            video_url=None,
+            reps=None,
+            error=error,
+        )
+
+    # Save uploaded file
+    ext = os.path.splitext(video_file.filename)[1].lower() or ".mp4"
+    input_name = f"{uuid.uuid4().hex}_input{ext}"
+    output_name = f"{uuid.uuid4().hex}_output.mp4"
+
+    input_path = os.path.join(WORKOUT_UPLOAD_FOLDER, input_name)
+    output_path = os.path.join(WORKOUT_OUTPUT_FOLDER, output_name)
+    video_file.save(input_path)
+
+    # Choose analyzer
+    try:
+        if workout_type == "squat":
+            reps, processed_path = _analyze_squat(input_path, output_path)
+        elif workout_type == "pullup":
+            reps, processed_path = _analyze_pullup(input_path, output_path)
+        elif workout_type == "jumping_jack":
+            reps, processed_path = _analyze_jumping_jack(input_path, output_path)
+        else:
+            workout_type = "pushup"
+            reps, processed_path = _analyze_pushup(input_path, output_path)
+
+        if processed_path is None:
+            raise RuntimeError("Failed to process video")
+
+        # Build URL for template
+        rel_path = os.path.relpath(processed_path, os.path.join(BASE_DIR, "static"))
+        video_url = url_for("static", filename=rel_path.replace("\\", "/"))
+
+        return render_template(
+            "workouts.html",
+            workouts=sample_workouts,
+            user_id=user_id,
+            selected_workout=workout_type,
+            video_url=video_url,
+            reps=reps,
+            error=None,
+        )
+
+    except Exception as e:
+        print("Workout analyze error:", e)
+        error = f"Failed to analyze workout: {e}"
+        return render_template(
+            "workouts.html",
+            workouts=sample_workouts,
+            user_id=user_id,
+            selected_workout=workout_type,
+            video_url=None,
+            reps=None,
+            error=error,
+        )
 
 
 if __name__ == "__main__":

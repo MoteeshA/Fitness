@@ -1,102 +1,240 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>FitSmart AI — Assessment & Calendar</title>
+{% extends "base.html" %}
 
-  <!-- Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+{% block title %}FitSmart AI — Assessment & Calendar{% endblock %}
 
+{% block extra_css %}
   <!-- FullCalendar (CSS) -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
-
-  <!-- Font Awesome -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Font Awesome (for existing icons) -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 
   <style>
-    :root { --brand:#0fb15d; --brand-dark:#0a8e48; --accent:#3b82f6; --accent-dark:#2563eb; --muted:#6c757d; }
-    body { background: linear-gradient(135deg,#f8fdf9,#f0f7ff); font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-    .navbar{background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.05);}
-    .btn-brand{background:var(--brand);color:#fff;border:none;}
-    .btn-brand:hover{background:var(--brand-dark);}
-    .badge-assessment{background:var(--brand);color:#fff;padding:0.35rem 0.75rem;border-radius:20px;font-size:.85rem}
-    .badge-nutrition{background:var(--accent);color:#fff;padding:0.35rem 0.75rem;border-radius:20px;font-size:.85rem}
-    .score-bar{height:24px;border-radius:12px;background:#e9f4ec;overflow:hidden;border:1px solid rgba(0,0,0,0.03)}
-    .score-bar-fill{height:100%;text-align:right;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:flex-end;padding-right:10px}
-    /* Calendar styling: explicit min-height to avoid invisible container */
-    #calendar{background:#fff;border-radius:12px;padding:1rem; min-height:420px; box-shadow: 0 1px 6px rgba(0,0,0,0.04);}
-    .log-row{cursor:pointer;transition:background .15s}
-    .log-row:hover{background:#f8f9fa}
-    .card-header .btn{font-size:.85rem}
-    .muted-small{color:var(--muted);font-size:.85rem}
-    .no-logs{padding:1.25rem;text-align:center;color:var(--muted)}
-    @media (min-width: 992px){ #calendar{min-height:480px} }
+    :root {
+      --brand: #0fb15d;
+      --brand-dark: #0a8e48;
+      --accent: #3b82f6;
+      --accent-dark: #2563eb;
+      --muted: #6c757d;
+    }
+
+    body {
+      background: radial-gradient(circle at top left, #bbf7d0 0, #f8fdf9 40%, #ecfeff 100%);
+    }
+
+    .btn-brand {
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      font-weight: 600;
+      box-shadow: 0 10px 22px rgba(15, 177, 93, 0.35);
+    }
+
+    .btn-brand:hover {
+      background: var(--brand-dark);
+      color: #fff;
+    }
+
+    .badge-assessment,
+    .badge-nutrition {
+      padding: 0.32rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .badge-assessment {
+      background: rgba(16, 185, 129, 0.14);
+      color: #166534;
+    }
+
+    .badge-nutrition {
+      background: rgba(37, 99, 235, 0.14);
+      color: #1d4ed8;
+    }
+
+    .muted-small {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    /* Cards */
+    .fs-card {
+      border-radius: 18px;
+      background: #ffffff;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+    }
+
+    .fs-card-header {
+      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+      padding: 0.85rem 1rem;
+      background: linear-gradient(90deg, rgba(240, 253, 250, 0.7), #ffffff);
+      border-radius: 18px 18px 0 0;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .fs-card-header i {
+      color: var(--brand);
+    }
+
+    .fs-card-body {
+      padding: 1rem 1.1rem 1.2rem;
+    }
+
+    /* Score bar */
+    .score-bar {
+      height: 24px;
+      border-radius: 999px;
+      background: #e9f4ec;
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, 0.03);
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      text-align: right;
+      color: #fff;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 10px;
+      font-size: 0.8rem;
+      transition: width 0.4s ease-out;
+    }
+
+    /* Calendar container */
+    #calendar {
+      background: #fff;
+      border-radius: 14px;
+      padding: 0.75rem;
+      min-height: 420px;
+      box-shadow: 0 0 0 1px rgba(226, 232, 240, 0.9);
+    }
+
+    @media (min-width: 992px) {
+      #calendar {
+        min-height: 480px;
+      }
+    }
+
+    /* Recent activity list */
+    .log-row {
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s ease-out;
+      font-size: 0.9rem;
+    }
+
+    .log-row:hover {
+      background: #f8fafc;
+      transform: translateY(-1px);
+    }
+
+    .no-logs {
+      padding: 1.25rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* Legend chips */
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      color: #4b5563;
+    }
+
+    .legend-chip span {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+    }
   </style>
-</head>
-<body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg px-3 px-md-4">
-    <a class="navbar-brand fw-bold text-success" href="{{ url_for('dashboard') }}">
-      <i class="fas fa-brain-circuit"></i> FitSmart AI
-    </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="nav">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link active" aria-current="page" href="{{ url_for('assessment') }}">Assessment</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('nutrition') }}">Nutrition</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('progress') }}">Progress</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('workouts') }}">Workouts</a></li>
-      </ul>
+{% endblock %}
 
-      {% if session.get('user') %}
-        <div class="d-flex align-items-center gap-2">
-          <span class="me-2">Welcome, <strong>{{ session.get('user') }}</strong></span>
-          <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
-        </div>
-      {% else %}
-        <a class="btn btn-brand btn-sm" href="{{ url_for('login') }}">Login</a>
-      {% endif %}
-    </div>
-  </nav>
-
+{% block content %}
   <div class="container my-4">
+    <div class="d-flex justify-content-between align-items-end mb-3 flex-wrap gap-2">
+      <div>
+        <h4 class="mb-1">Assessment & Health Calendar</h4>
+        <p class="muted-small mb-0">
+          Run quick fitness checks and visually track your assessments and nutrition logs over time.
+        </p>
+      </div>
+      <div class="legend d-flex gap-3 align-items-center">
+        <div class="legend-chip">
+          <span style="background: rgba(16,185,129,0.7);"></span> Assessment
+        </div>
+        <div class="legend-chip">
+          <span style="background: rgba(37,99,235,0.7);"></span> Nutrition
+        </div>
+      </div>
+    </div>
+
     <div class="row gy-4">
+      <!-- LEFT COLUMN: Quick Assessment + Recent Activity -->
       <div class="col-lg-5">
         <!-- Quick Assessment -->
-        <div class="card mb-3">
-          <div class="card-header d-flex align-items-center">
-            <i class="fas fa-bolt me-2"></i> Quick Assessment
-            <small class="muted-small ms-auto">Instant BMI & suggestions</small>
+        <div class="fs-card mb-3">
+          <div class="fs-card-header">
+            <i class="fas fa-bolt"></i>
+            Quick Assessment
+            <small class="muted-small ms-auto d-none d-md-inline">Instant BMI & suggestions</small>
           </div>
-          <div class="card-body">
+          <div class="fs-card-body">
             <!-- NOTE: form action kept for graceful degradation (non-JS fallback) -->
             <form method="POST" action="{{ url_for('run_assessment') }}" id="quickAssessForm">
               <div class="row g-2 mb-3">
-                <div class="col-md-6"><input name="age" id="age" class="form-control" type="number" placeholder="Age" min="5"></div>
+                <div class="col-md-6">
+                  <input name="age" id="age" class="form-control" type="number" placeholder="Age" min="5">
+                </div>
                 <div class="col-md-6">
                   <select name="gender" id="gender" class="form-select">
                     <option value="">Gender</option>
-                    <option>Male</option><option>Female</option><option>Other</option>
+                    <option>Male</option>
+                    <option>Female</option>
+                    <option>Other</option>
                   </select>
                 </div>
               </div>
               <div class="row g-2 mb-3">
-                <div class="col-md-6"><input name="height" id="height" class="form-control" type="number" placeholder="Height (cm)" required min="30" step="0.1"></div>
-                <div class="col-md-6"><input name="weight" id="weight" class="form-control" type="number" placeholder="Weight (kg)" required min="1" step="0.1"></div>
+                <div class="col-md-6">
+                  <input name="height" id="height" class="form-control" type="number"
+                         placeholder="Height (cm)" required min="30" step="0.1">
+                </div>
+                <div class="col-md-6">
+                  <input name="weight" id="weight" class="form-control" type="number"
+                         placeholder="Weight (kg)" required min="1" step="0.1">
+                </div>
               </div>
-              <div class="mb-3"><input name="goals" id="goals" class="form-control" placeholder="Goals (e.g., lose 5 kg in 3 months)"></div>
+              <div class="mb-3">
+                <input name="goals" id="goals" class="form-control"
+                       placeholder="Goals (e.g., lose 5 kg in 3 months)">
+              </div>
 
               <div class="d-flex gap-2 mb-2">
-                <button class="btn btn-brand flex-grow-1" type="submit" id="runAssessBtn"><i class="fas fa-play me-2"></i>Run Assessment</button>
-                <button class="btn btn-outline-secondary" type="button" id="calcBmiBtn" title="Calculate BMI without submitting"><i class="fas fa-calculator"></i></button>
+                <button class="btn btn-brand flex-grow-1" type="submit" id="runAssessBtn">
+                  <i class="fas fa-play me-2"></i>Run Assessment
+                </button>
+                <button class="btn btn-outline-secondary rounded-pill"
+                        type="button" id="calcBmiBtn"
+                        title="Calculate BMI without submitting">
+                  <i class="fas fa-calculator"></i>
+                </button>
               </div>
 
               <div id="instantResult" class="mt-2" style="display:none;">
-                <div class="score-bar"><div id="scoreFill" class="score-bar-fill" style="width:0%"></div></div>
+                <div class="score-bar">
+                  <div id="scoreFill" class="score-bar-fill" style="width:0%"></div>
+                </div>
                 <div class="mt-2 muted-small" id="bmiText"></div>
               </div>
             </form>
@@ -104,50 +242,63 @@
         </div>
 
         <!-- Recent Activity -->
-        <div class="card">
-          <div class="card-header d-flex align-items-center">
-            <i class="fas fa-history me-2"></i> Recent Activity
+        <div class="fs-card">
+          <div class="fs-card-header">
+            <i class="fas fa-history"></i>
+            Recent Activity
             <small class="muted-small ms-auto">Tap an entry for details</small>
           </div>
-          <div class="card-body p-0">
+          <div class="fs-card-body p-0">
             <ul class="list-group list-group-flush" id="recentList">
               {% if logs %}
                 {% for log in logs %}
-                <li class="list-group-item log-row" data-type="{{ log.type }}" data-date="{{ log.date }}" data-data='{{ log.data|tojson|safe }}'>
-                  {% if log.type == 'assessment' %}
-                    <span class="badge-assessment">Assessment</span>
-                    BMI {{ log.data.bmi }}, Score {{ log.data.score }}
-                  {% else %}
-                    <span class="badge-nutrition">Nutrition</span>
-                    Calories {{ log.data.totals.calories }}
-                  {% endif %}
-                  <span class="float-end small text-muted">{{ log.date }}</span>
-                </li>
+                  <li class="list-group-item log-row"
+                      data-type="{{ log.type }}"
+                      data-date="{{ log.date }}"
+                      data-data='{{ log.data|tojson|safe }}'>
+                    {% if log.type == 'assessment' %}
+                      <span class="badge-assessment">Assessment</span>
+                      BMI {{ log.data.bmi }}, Score {{ log.data.score }}
+                    {% else %}
+                      <span class="badge-nutrition">Nutrition</span>
+                      Calories {{ log.data.totals.calories }}
+                    {% endif %}
+                    <span class="float-end small text-muted">{{ log.date }}</span>
+                  </li>
                 {% endfor %}
               {% else %}
-                <li class="list-group-item no-logs">No logs yet — run an assessment or analyze a meal to populate the calendar.</li>
+                <li class="list-group-item no-logs">
+                  No logs yet — run an assessment or analyze a meal to populate the calendar.
+                </li>
               {% endif %}
             </ul>
           </div>
         </div>
       </div>
 
+      <!-- RIGHT COLUMN: Calendar -->
       <div class="col-lg-7">
-        <!-- Calendar -->
-        <div class="card">
-          <div class="card-header d-flex align-items-center">
-            <i class="fas fa-calendar-days me-2"></i> Health Calendar
+        <div class="fs-card">
+          <div class="fs-card-header">
+            <i class="fas fa-calendar-days"></i>
+            Health Calendar
             <div class="ms-auto d-flex gap-2">
-              <button class="btn btn-sm btn-outline-secondary" id="todayBtn"><i class="fas fa-calendar-day me-1"></i> Today</button>
-              <button class="btn btn-sm btn-outline-secondary" id="exportCsvBtn"><i class="fas fa-download"></i> Export</button>
+              <button class="btn btn-sm btn-outline-secondary rounded-pill" id="todayBtn">
+                <i class="fas fa-calendar-day me-1"></i> Today
+              </button>
+              <button class="btn btn-sm btn-outline-secondary rounded-pill" id="exportCsvBtn">
+                <i class="fas fa-download me-1"></i> Export
+              </button>
             </div>
           </div>
-          <div class="card-body"><div id="calendar" aria-label="Health calendar"></div></div>
+          <div class="fs-card-body">
+            <div id="calendar" aria-label="Health calendar"></div>
+          </div>
         </div>
 
-        <div class="mt-3 d-flex gap-3 align-items-center">
-          <div><span class="badge-assessment">&nbsp;</span> Assessment</div>
-          <div><span class="badge-nutrition">&nbsp;</span> Nutrition</div>
+        <div class="mt-3 d-flex gap-3 align-items-center small">
+          <div><span class="badge-assessment">&nbsp;</span> Assessment entries</div>
+          <div><span class="badge-nutrition">&nbsp;</span> Nutrition entries</div>
         </div>
       </div>
     </div>
@@ -157,15 +308,18 @@
   <div class="modal fade" id="logModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title">Entry Details</h5>
-          <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-header">
+          <h5 class="modal-title">Entry Details</h5>
+          <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
         <div class="modal-body" id="logModalBody"></div>
       </div>
     </div>
   </div>
+{% endblock %}
 
-  <!-- libs: bootstrap then fullcalendar (JS) -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}
+  <!-- FullCalendar (JS) -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 
   <script>
@@ -180,8 +334,8 @@
       const dt = new Date(d);
       if (isNaN(dt)) return null;
       const y = dt.getFullYear();
-      const m = String(dt.getMonth()+1).padStart(2,'0');
-      const day = String(dt.getDate()).padStart(2,'0');
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const day = String(dt.getDate()).padStart(2, '0');
       return `${y}-${m}-${day}`;
     }
 
@@ -204,27 +358,39 @@
     // Render recent activity list DOM
     function renderRecentList() {
       const ul = document.getElementById('recentList');
+      if (!ul) return;
+
       ul.innerHTML = '';
       if (!Array.isArray(logs) || logs.length === 0) {
-        ul.innerHTML = '<li class="list-group-item no-logs">No logs yet — run an assessment or analyze a meal to populate the calendar.</li>';
+        ul.innerHTML =
+          '<li class="list-group-item no-logs">No logs yet — run an assessment or analyze a meal to populate the calendar.</li>';
         return;
       }
+
       logs.slice().reverse().forEach(l => { // newest first
         const li = document.createElement('li');
         li.className = 'list-group-item log-row';
         li.dataset.type = l.type || 'assessment';
         li.dataset.date = l.date || '';
         li.dataset.data = JSON.stringify(l.data || {});
+
         const badge = document.createElement('span');
         badge.className = (l.type === 'assessment' ? 'badge-assessment' : 'badge-nutrition');
         badge.textContent = (l.type === 'assessment' ? 'Assessment' : 'Nutrition');
         li.appendChild(badge);
-        const text = document.createTextNode(' ' + (l.type === 'assessment' ? `BMI ${l.data.bmi || '-'}, Score ${l.data.score || '-'}` : `Calories ${l.data.totals ? (l.data.totals.calories || 0) : 0}`));
+
+        const text = document.createTextNode(
+          ' ' + (l.type === 'assessment'
+            ? `BMI ${l.data.bmi || '-'}, Score ${l.data.score || '-'}`
+            : `Calories ${l.data.totals ? (l.data.totals.calories || 0) : 0}`)
+        );
         li.appendChild(text);
+
         const spanDate = document.createElement('span');
         spanDate.className = 'float-end small text-muted';
         spanDate.textContent = l.date || '';
         li.appendChild(spanDate);
+
         li.addEventListener('click', () => {
           try {
             const raw = JSON.parse(li.dataset.data);
@@ -237,7 +403,7 @@
       });
     }
 
-    // Add event to calendar (or rerender)
+    // Add events to calendar
     function refreshCalendar() {
       if (!calendar) return;
       calendar.removeAllEvents();
@@ -247,16 +413,31 @@
 
     // Show modal for a log entry
     function showLogModal(props) {
-      const d = props.raw || {}; let html = '';
+      const d = props.raw || {};
+      let html = '';
+
       if (props.type === 'assessment') {
         html += `<p><strong>Score:</strong> ${d.score || '-'} &nbsp;|&nbsp; <strong>BMI:</strong> ${d.bmi || '-'} &nbsp;|&nbsp; <strong>Status:</strong> ${d.status || '-'}</p>`;
-        if (d.recommendations && d.recommendations.length) html += '<h6>Recommendations</h6><ul>' + d.recommendations.map(r => `<li>${r}</li>`).join('') + '</ul>';
+        if (d.recommendations && d.recommendations.length) {
+          html += '<h6>Recommendations</h6><ul>' +
+            d.recommendations.map(r => `<li>${r}</li>`).join('') +
+            '</ul>';
+        }
       } else if (props.type === 'nutrition') {
-        const t = d.totals || {}; html += `<p><strong>Totals:</strong> Calories ${t.calories || 0}, Protein ${t.protein || 0}g, Carbs ${t.carbs || 0}g, Fat ${t.fat || 0}g</p>`;
-        if (d.items && d.items.length) html += '<h6>Detected items</h6><ul>' + d.items.map(it => `<li>${it.name} — ${it.calories || 0} kcal</li>`).join('') + '</ul>';
-        if (d.image_data) html += `<div class="mt-3"><img src="data:image/jpeg;base64,${d.image_data}" alt="meal" style="max-width:100%;border-radius:8px;"/></div>`;
+        const t = d.totals || {};
+        html += `<p><strong>Totals:</strong> Calories ${t.calories || 0}, Protein ${t.protein || 0}g, Carbs ${t.carbs || 0}g, Fat ${t.fat || 0}g</p>`;
+        if (d.items && d.items.length) {
+          html += '<h6>Detected items</h6><ul>' +
+            d.items.map(it => `<li>${it.name} — ${it.calories || 0} kcal</li>`).join('') +
+            '</ul>';
+        }
+        if (d.image_data) {
+          html += `<div class="mt-3"><img src="data:image/jpeg;base64,${d.image_data}" alt="meal" style="max-width:100%;border-radius:8px;"/></div>`;
+        }
       }
-      document.getElementById('logModalBody').innerHTML = html || '<p class="muted-small">No details available.</p>';
+
+      document.getElementById('logModalBody').innerHTML =
+        html || '<p class="muted-small">No details available.</p>';
       new bootstrap.Modal(document.getElementById('logModal')).show();
     }
 
@@ -265,18 +446,25 @@
       const h = parseFloat(document.getElementById('height').value);
       const w = parseFloat(document.getElementById('weight').value);
       if (!h || !w) return null;
+
       const h_m = h / 100;
       const bmi = +(w / (h_m * h_m)).toFixed(1);
-      // simple score mapping for display (not authoritative)
+
+      // simple score mapping for display (not medical)
       let score = 50;
       if (bmi < 18.5) score = 60;
       else if (bmi < 25) score = 90;
       else if (bmi < 30) score = 70;
       else score = 45;
+
       document.getElementById('instantResult').style.display = 'block';
       const fill = document.getElementById('scoreFill');
       fill.style.width = `${Math.max(6, Math.min(100, score))}%`;
-      fill.style.background = (score >= 80 ? 'linear-gradient(90deg,#28a745,#0fb15d)' : (score >= 60 ? '#f59e0b' : '#ef4444'));
+      fill.style.background = (
+        score >= 80
+          ? 'linear-gradient(90deg,#28a745,#0fb15d)'
+          : (score >= 60 ? '#f59e0b' : '#ef4444')
+      );
       document.getElementById('bmiText').textContent = `BMI: ${bmi} • Simple score: ${score}`;
       return { bmi, score };
     }
@@ -286,31 +474,39 @@
       ev.preventDefault();
       const btn = document.getElementById('runAssessBtn');
       if (btn.disabled) return;
+
       const age = document.getElementById('age').value || '';
       const gender = document.getElementById('gender').value || '';
       const height = document.getElementById('height').value || '';
       const weight = document.getElementById('weight').value || '';
       const goals = document.getElementById('goals').value || '';
 
-      // compute BMI locally as fallback/preview
+      // compute BMI locally as preview
       const bmiRes = calcAndShowBMI();
-      const payload = { age, gender, height, weight, goals, bmi: (bmiRes && bmiRes.bmi) ? bmiRes.bmi : null };
+      const payload = {
+        age,
+        gender,
+        height,
+        weight,
+        goals,
+        bmi: (bmiRes && bmiRes.bmi) ? bmiRes.bmi : null
+      };
 
-      // disable button & show spinner
       btn.disabled = true;
       const origText = btn.innerHTML;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Running...';
 
       try {
-        // POST to your Flask endpoint - expects JSON response (adapt if needed)
         const resp = await fetch("{{ url_for('run_assessment') }}", {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
           body: JSON.stringify(payload)
         });
 
         if (!resp.ok) {
-          // try fallback to form POST (non-AJAX) if server doesn't accept JSON
           console.warn('AJAX POST failed, falling back to native submit. Status:', resp.status);
           document.getElementById('quickAssessForm').submit();
           return;
@@ -319,24 +515,25 @@
         const data = await resp.json();
 
         if (data && data.success) {
-          // append new log if returned
           if (data.log) {
-            // server returns one log object (recommended):
-            logs = Array.isArray(data.logs) ? data.logs : (Array.isArray(logs) ? logs.concat([data.log]) : [data.log]);
+            logs = Array.isArray(logs)
+              ? logs.concat([data.log])
+              : [data.log];
           } else if (Array.isArray(data.logs)) {
-            // server returns an updated logs array
             logs = data.logs;
           }
-          // update UI
+
           renderRecentList();
           refreshCalendar();
 
-          // show result immediately (if server returned log.data)
-          const newLog = data.log || (logs.length ? logs[logs.length-1] : null);
+          const newLog = data.log || (logs.length ? logs[logs.length - 1] : null);
           if (newLog) {
-            showLogModal({ raw: newLog.data || {}, type: newLog.type || 'assessment', date: newLog.date || fmtDate(new Date()) });
+            showLogModal({
+              raw: newLog.data || {},
+              type: newLog.type || 'assessment',
+              date: newLog.date || fmtDate(new Date())
+            });
           } else {
-            // fallback toast
             const toastEl = document.createElement('div');
             toastEl.className = 'position-fixed bottom-0 end-0 m-3 p-2 bg-success text-white rounded';
             toastEl.textContent = 'Assessment saved';
@@ -345,11 +542,12 @@
           }
         } else {
           console.warn('Server responded with error or unexpected format', data);
-          alert((data && data.message) ? data.message : 'Failed to run assessment — check server logs.');
+          alert((data && data.message)
+            ? data.message
+            : 'Failed to run assessment — check server logs.');
         }
       } catch (err) {
         console.error('Assessment submit error', err);
-        // fallback to non-AJAX submit to keep behaviour safe
         document.getElementById('quickAssessForm').submit();
       } finally {
         btn.disabled = false;
@@ -359,27 +557,40 @@
 
     // CSV export (uses current logs array)
     function exportCsv() {
-      let rows = [['date','type','payload']];
-      (Array.isArray(logs) ? logs : []).forEach(l => rows.push([l.date || '', l.type || '', JSON.stringify(l.data || {})]));
-      const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+      let rows = [['date', 'type', 'payload']];
+      (Array.isArray(logs) ? logs : []).forEach(l => {
+        rows.push([
+          l.date || '',
+          l.type || '',
+          JSON.stringify(l.data || {})
+        ]);
+      });
+      const csv = rows
+        .map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(','))
+        .join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'fit_smart_logs.csv'; a.click();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'fitsmart_logs.csv';
+      a.click();
     }
 
-    // Initialize calendar and UI on window load
+    // Initialize calendar and UI
     window.addEventListener('load', () => {
       try {
-        // FullCalendar check
         if (typeof FullCalendar === 'undefined') {
           console.error('FullCalendar not loaded. Check CDN.');
           return;
         }
 
-        // instantiate calendar in outer scope
         const calendarEl = document.getElementById('calendar');
         calendar = new FullCalendar.Calendar(calendarEl, {
           initialView: 'dayGridMonth',
-          headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
+          headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: ''
+          },
           events: buildEventsFromLogs(),
           navLinks: true,
           dayMaxEvents: true,
@@ -390,11 +601,9 @@
         });
         calendar.render();
 
-        // Wire buttons
         document.getElementById('todayBtn').addEventListener('click', () => calendar.today());
         document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
 
-        // BMI calculator button
         document.getElementById('calcBmiBtn').addEventListener('click', () => {
           const res = calcAndShowBMI();
           if (!res) {
@@ -402,17 +611,13 @@
           }
         });
 
-        // Form submit (AJAX)
         const form = document.getElementById('quickAssessForm');
         if (form) form.addEventListener('submit', submitAssessment);
 
-        // Render initial recent list & attach click handlers
         renderRecentList();
-
       } catch (err) {
         console.error('Initialization error:', err);
       }
     });
   </script>
-</body>
-</html>
+{% endblock %}

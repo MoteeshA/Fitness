@@ -1,173 +1,567 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>FitSmart AI – Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+{% extends "base.html" %}
+
+{% block title %}FitSmart AI – Dashboard{% endblock %}
+
+{% block extra_css %}
   <style>
-    body { background-color: #f8fdf9; font-family: "Inter", sans-serif; }
-    .navbar { background: #ffffff; border-bottom: 1px solid #e0e0e0; }
-    .navbar-brand { font-weight: 600; color: #0fb15d; }
-    .btn-login { background-color: #0fb15d; color: #fff; border-radius: 6px; padding: 6px 16px; }
-    .hero {
-      background: url("{{ url_for('static', filename='fitness-hero.jpg') }}") no-repeat center center;
-      background-size: cover;
-      padding: 80px 20px; text-align: center; color: #fff;
+    .fs-hero {
+      position: relative;
+      padding: 70px 0 40px;
+      background: radial-gradient(circle at top left, #bbf7d0 0, #f8fdf9 40%, #ecfeff 100%);
+      overflow: hidden;
     }
-    .hero h1 { font-weight: 700; }
-    .hero p { font-size: 18px; max-width: 600px; margin: 0 auto; }
-    .card { border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .score-bar { height: 20px; background-color: #e6e6e6; border-radius: 10px; overflow: hidden; }
-    .score-bar-fill { background-color: #0fb15d; height: 100%; text-align: right; color: white; padding-right: 8px; font-size: 14px; font-weight: bold; }
-    .flash-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
-    .alert { border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; font-size: 14px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.15); opacity: 0.95; }
-    .alert-success { background-color: #e6f7ed; color: #0f5132; }
-    .alert-danger { background-color: #fde2e1; color: #842029; }
-    .alert-info { background-color: #e7f1ff; color: #084298; }
-    .welcome-card { text-align: center; padding: 30px 20px; }
+
+    .fs-hero::before {
+      content: "";
+      position: absolute;
+      width: 380px;
+      height: 380px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34, 197, 94, 0.18), transparent 65%);
+      top: -120px;
+      right: -80px;
+      pointer-events: none;
+    }
+
+    .fs-hero-subtitle {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #16a34a;
+      font-weight: 600;
+    }
+
+    .fs-hero-title {
+      font-size: clamp(2.1rem, 3vw, 2.8rem);
+      font-weight: 800;
+      color: #022c22;
+      margin-bottom: 0.4rem;
+    }
+
+    .fs-hero-highlight {
+      background: linear-gradient(120deg, #16a34a, #22c55e, #0fb1b0);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .fs-hero-text {
+      font-size: 0.98rem;
+      color: #4b5563;
+      max-width: 520px;
+    }
+
+    .fs-hero-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      background: rgba(22, 163, 74, 0.1);
+      padding: 4px 10px;
+      font-size: 0.78rem;
+      color: #166534;
+      margin-bottom: 10px;
+    }
+
+    .fs-hero-list {
+      font-size: 0.9rem;
+      color: #374151;
+    }
+
+    .fs-hero-image-card {
+      max-width: 430px;
+      margin-left: auto;
+      position: relative;
+    }
+
+    .fs-hero-image-inner {
+      border-radius: 26px;
+      background: linear-gradient(145deg, #022c22, #065f46);
+      padding: 14px 14px 4px;
+      box-shadow: 0 25px 55px rgba(15, 23, 42, 0.35);
+      color: #ecfdf5;
+    }
+
+    .fs-hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.16);
+      padding: 3px 9px;
+      font-size: 0.75rem;
+    }
+
+    .fs-hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .fs-hero-metric {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 14px;
+      padding: 7px 9px;
+      font-size: 0.75rem;
+    }
+
+    .fs-hero-metric strong {
+      display: block;
+      font-size: 0.85rem;
+    }
+
+    .fs-hero-floating {
+      position: absolute;
+      right: -12px;
+      bottom: -18px;
+      background: #f9fafb;
+      color: #111827;
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 0.78rem;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .fs-hero-floating i {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: rgba(22, 163, 74, 0.1);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #16a34a;
+    }
+
+    /* Assessment layout */
+    .fs-section {
+      padding: 28px 0 12px;
+    }
+
+    .fs-section-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #111827;
+    }
+
+    .fs-section-subtitle {
+      font-size: 0.84rem;
+      color: #6b7280;
+    }
+
+    .score-bar {
+      height: 20px;
+      background-color: #e5e7eb;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      background: linear-gradient(90deg, #16a34a, #22c55e, #0fb1b0);
+      height: 100%;
+      text-align: right;
+      color: white;
+      padding-right: 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      white-space: nowrap;
+      transition: width 0.6s ease-out;
+    }
+
+    .fs-chip-field {
+      font-size: 0.78rem;
+      color: #6b7280;
+      margin-bottom: 4px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .fs-input-hint {
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
+
+    .fs-form-divider {
+      height: 1px;
+      border-radius: 999px;
+      background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+      margin: 14px 0;
+    }
+
+    .fs-btn-primary {
+      background: linear-gradient(135deg, #16a34a, #22c55e);
+      border: none;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 10px 0;
+      box-shadow: 0 18px 35px rgba(22, 163, 74, 0.45);
+    }
+
+    .fs-btn-primary:hover {
+      background: linear-gradient(135deg, #15803d, #16a34a);
+    }
+
+    /* Right column */
+    .fs-result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .fs-status-pill {
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ecfdf3;
+      color: #166534;
+    }
+
+    .fs-status-pill i {
+      font-size: 0.9rem;
+    }
+
+    .fs-score-badge {
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      background: #0f766e;
+      color: #e0f2f1;
+    }
+
+    .fs-summary-grid {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+
+    .fs-summary-item {
+      border-radius: 12px;
+      background: #f9fafb;
+      padding: 6px 9px;
+      border: 1px dashed #d1d5db;
+    }
+
+    .fs-summary-label {
+      color: #6b7280;
+      font-size: 0.76rem;
+    }
+
+    .fs-summary-value {
+      font-weight: 600;
+      color: #111827;
+    }
+
+    .fs-recommendations li + li {
+      margin-top: 6px;
+    }
+
+    .fs-empty-card {
+      text-align: center;
+      padding: 28px 22px;
+    }
+
     .welcome-img-wrapper {
-      width: 180px; height: 180px; margin: 0 auto 20px; background: #eafaf1; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1); animation: float 3s ease-in-out infinite;
+      width: 180px;
+      height: 180px;
+      margin: 0 auto 20px;
+      background: #eafaf1;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 28px rgba(22, 163, 74, 0.28);
+      animation: float 3s ease-in-out infinite;
     }
+
     .welcome-img-wrapper img { max-width: 120px; }
     .welcome-card h5 { font-weight: 600; color: #0fb15d; margin-bottom: 10px; }
-    .welcome-card p { color: #555; margin-bottom: 6px; }
-    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+    .welcome-card p { color: #4b5563; margin-bottom: 6px; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+
+    @media (max-width: 991.98px) {
+      .fs-hero {
+        padding-top: 40px;
+      }
+
+      .fs-hero-image-card {
+        margin-top: 24px;
+      }
+    }
   </style>
-</head>
-<body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg px-4">
-    <a class="navbar-brand" href="{{ url_for('dashboard') }}">FitSmart AI</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div id="nav" class="collapse navbar-collapse">
-      <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('assessment') }}">Assessment</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('nutrition') }}">Nutrition</a></li>
-        <li class="nav-item"><a class="nav-link" href="#">Progress</a></li>
-      </ul>
-      {% if session.user %}
-        <span class="ms-3 fw-bold text-success">Welcome, {{ session.user }}</span>
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger ms-3">Logout</a>
-      {% else %}
-        <a href="{{ url_for('login') }}" class="btn btn-login ms-3">Login</a>
-        <a href="{{ url_for('signup') }}" class="btn btn-outline-success ms-2">Register</a>
-      {% endif %}
-    </div>
-  </nav>
+{% endblock %}
 
-  <!-- Flash Messages -->
-  <div class="flash-container">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-  </div>
-
+{% block content %}
   <!-- Hero -->
-  <section class="hero">
-    <h1>FitSmart AI Assistant</h1>
-    <p>Get personalized fitness insights powered by AI. Discover your fitness level and receive tailored recommendations.</p>
+  <section class="fs-hero">
+    <div class="container">
+      <div class="row align-items-center">
+        <!-- Text side -->
+        <div class="col-lg-6 mb-4 mb-lg-0">
+          <div class="fs-hero-chip">
+            <i class="bi bi-stars"></i>
+            AI-Powered Fitness Intelligence
+          </div>
+          <h1 class="fs-hero-title">
+            Understand your <span class="fs-hero-highlight">fitness profile</span> in seconds.
+          </h1>
+          <p class="fs-hero-text mb-3">
+            FitSmart AI analyzes your body metrics and lifestyle to estimate your fitness score,
+            classify your BMI, and generate personalized improvement steps.
+          </p>
+          <ul class="fs-hero-list list-unstyled mb-0">
+            <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>Science-backed BMI & fitness scoring</li>
+            <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>Actionable habits you can start today</li>
+            <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>Stay aligned with your goals: weight loss, strength, or endurance</li>
+          </ul>
+        </div>
+
+        <!-- Visual side -->
+        <div class="col-lg-6">
+          <div class="fs-hero-image-card">
+            <div class="fs-hero-image-inner">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="fs-hero-pill">
+                  <i class="bi bi-activity"></i>
+                  Live Wellness Snapshot
+                </span>
+                <span style="font-size:0.78rem;color:#a7f3d0;">
+                  <i class="bi bi-shield-check me-1"></i>AI coach online
+                </span>
+              </div>
+              <div class="fs-hero-metrics">
+                <div class="fs-hero-metric">
+                  <span class="text-gray-300 d-block mb-1">Fitness Score</span>
+                  <strong>82 / 100</strong>
+                  <small class="text-emerald-300">Good · keep progressing</small>
+                </div>
+                <div class="fs-hero-metric">
+                  <span class="text-gray-300 d-block mb-1">BMI</span>
+                  <strong>22.4</strong>
+                  <small class="text-emerald-300">Normal range</small>
+                </div>
+                <div class="fs-hero-metric">
+                  <span class="text-gray-300 d-block mb-1">Activity</span>
+                  <strong>4x / week</strong>
+                  <small class="text-emerald-300">Moderately active</small>
+                </div>
+              </div>
+              <p class="mt-3 mb-2" style="font-size:0.8rem;color:#d1fae5;">
+                “We're turning your daily choices into a clear fitness story —
+                and showing you exactly what to do next.”
+              </p>
+            </div>
+
+            <div class="fs-hero-floating">
+              <i class="bi bi-lightning-charge-fill"></i>
+              <div>
+                <strong style="font-size:0.82rem;">Instant assessment</strong><br/>
+                <span style="font-size:0.78rem;color:#4b5563;">Just fill the form and get your plan.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div> <!-- row -->
+    </div>
   </section>
 
-  <!-- Fitness Assessment -->
-  <div class="container my-5">
-    <div class="row">
-      <!-- Left: Form -->
-      <div class="col-lg-6">
-        <div class="card p-4">
-          <h5 class="mb-3">Fitness Assessment</h5>
-          <form method="POST" action="{{ url_for('analyze') }}">
-            <div class="row mb-3">
-              <div class="col">
-                <label>Age</label>
-                <input type="number" class="form-control" name="age" required>
+  <!-- Assessment Section -->
+  <section class="fs-section">
+    <div class="container">
+      <div class="row g-4">
+        <!-- Left: Form -->
+        <div class="col-lg-6">
+          <div class="fs-card p-4 p-md-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <div class="fs-section-title">Fitness Assessment</div>
+                <div class="fs-section-subtitle">
+                  Fill your details and let FitSmart AI analyze your current fitness level.
+                </div>
               </div>
-              <div class="col">
-                <label>Gender</label>
-                <select class="form-select" name="gender" required>
-                  <option value="">Select gender</option>
-                  <option>Male</option><option>Female</option><option>Other</option>
+              <span class="fs-badge-soft">
+                <i class="bi bi-magic me-1"></i>Smart Analysis
+              </span>
+            </div>
+
+            <form method="POST" action="{{ url_for('analyze') }}" class="mt-3">
+              <div class="row g-3 mb-2">
+                <div class="col-md-6">
+                  <div class="fs-chip-field">Age</div>
+                  <input type="number" class="form-control" name="age" required placeholder="e.g. 26">
+                </div>
+                <div class="col-md-6">
+                  <div class="fs-chip-field">Gender</div>
+                  <select class="form-select" name="gender" required>
+                    <option value="">Select gender</option>
+                    <option>Male</option>
+                    <option>Female</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row g-3 mb-2">
+                <div class="col-md-6">
+                  <div class="fs-chip-field">Height</div>
+                  <input type="number" class="form-control" name="height" required placeholder="in cm">
+                  <div class="fs-input-hint">Example: 170</div>
+                </div>
+                <div class="col-md-6">
+                  <div class="fs-chip-field">Weight</div>
+                  <input type="number" class="form-control" name="weight" required placeholder="in kg">
+                  <div class="fs-input-hint">Example: 68</div>
+                </div>
+              </div>
+
+              <div class="fs-form-divider"></div>
+
+              <div class="mb-3">
+                <div class="fs-chip-field">Activity Level</div>
+                <select class="form-select" name="activity">
+                  <option value="">Select your activity level</option>
+                  <option>Sedentary (Little to no exercise)</option>
+                  <option>Lightly Active (1-3 days/week)</option>
+                  <option>Moderately Active (3-5 days/week)</option>
+                  <option>Very Active (6-7 days/week)</option>
                 </select>
+                <div class="fs-input-hint mt-1">
+                  This helps us estimate your daily energy needs.
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <div class="fs-chip-field">Fitness Goals</div>
+                <input type="text" class="form-control" name="goals"
+                       placeholder="Lose weight, build muscle, improve stamina, etc.">
+              </div>
+
+              <div class="mb-3">
+                <div class="fs-chip-field">Medical Conditions (Optional)</div>
+                <input type="text" class="form-control" name="conditions"
+                       placeholder="e.g. knee pain, diabetes, high BP">
+                <div class="fs-input-hint mt-1">
+                  We’ll keep this in mind while suggesting workouts and intensity.
+                </div>
+              </div>
+
+              <button class="btn fs-btn-primary w-100 mt-3" type="submit">
+                <i class="bi bi-graph-up-arrow me-1"></i>
+                Analyze Fitness Level
+              </button>
+            </form>
+
+            <div class="mt-3 d-flex align-items-center" style="font-size:0.78rem;color:#6b7280;">
+              <i class="bi bi-lock-fill me-1"></i> Your details are processed securely for insights only.
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Results / Welcome -->
+        <div class="col-lg-6">
+          {% if result %}
+            <!-- When results are available -->
+            <div class="fs-card-soft p-4 mb-3">
+              <div class="fs-result-header">
+                <div>
+                  <div class="fs-section-title mb-1">Fitness Assessment Results</div>
+                  <div class="fs-section-subtitle">
+                    Here’s your current snapshot based on the information you provided.
+                  </div>
+                </div>
+                <div class="text-end">
+                  <div class="fs-status-pill mb-1">
+                    <i class="bi bi-heart-pulse-fill"></i>
+                    Status: {{ result.status }}
+                  </div>
+                  <div class="fs-score-badge">
+                    Score: {{ result.score }}/100
+                  </div>
+                </div>
+              </div>
+
+              <div class="score-bar mb-2">
+                <div class="score-bar-fill" style="width: {{ result.score }}%">
+                  {{ result.score }}%
+                </div>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center mb-1" style="font-size:0.8rem;">
+                <span class="text-muted">
+                  Higher score = better alignment of your current lifestyle with your goals.
+                </span>
+              </div>
+
+              <div class="fs-summary-grid">
+                <div class="fs-summary-item">
+                  <div class="fs-summary-label">Overall Status</div>
+                  <div class="fs-summary-value">{{ result.status }}</div>
+                </div>
+                <div class="fs-summary-item">
+                  <div class="fs-summary-label">Fitness Score</div>
+                  <div class="fs-summary-value">{{ result.score }}/100</div>
+                </div>
+                <div class="fs-summary-item">
+                  <div class="fs-summary-label">BMI</div>
+                  <div class="fs-summary-value">{{ result.bmi }}</div>
+                </div>
               </div>
             </div>
-            <div class="row mb-3">
-              <div class="col">
-                <label>Height (cm)</label>
-                <input type="number" class="form-control" name="height" required>
+
+            <div class="fs-card p-4">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="fs-section-title">AI Recommendations</div>
+                <span class="fs-badge-soft">
+                  <i class="bi bi-list-check me-1"></i>
+                  Next 7–14 days plan
+                </span>
               </div>
-              <div class="col">
-                <label>Weight (kg)</label>
-                <input type="number" class="form-control" name="weight" required>
+              <p class="fs-section-subtitle mb-2">
+                Follow these focused suggestions to move your score closer to 100.
+              </p>
+              <ul class="fs-recommendations">
+                {% for rec in result.recommendations %}
+                  <li>{{ rec }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+
+          {% else %}
+            <!-- Empty state / welcome -->
+            <div class="fs-card welcome-card fs-empty-card">
+              <div class="welcome-img-wrapper">
+                <img src="{{ url_for('static', filename='fitness-placeholder.png') }}" alt="Fitness Placeholder">
               </div>
+              <h5>Welcome to Your Fitness Dashboard</h5>
+              <p class="mb-1">
+                Start by completing the assessment on the left to unlock your personalized score and plan.
+              </p>
+              <p class="mb-2">
+                You’ll receive a clear summary of your current fitness level and the top actions you can take.
+              </p>
+              <p class="mb-0"><strong>Consistency beats perfection. Let’s begin today 💪</strong></p>
             </div>
-            <div class="mb-3">
-              <label>Activity Level</label>
-              <select class="form-select" name="activity">
-                <option value="">Select your activity level</option>
-                <option>Sedentary (Little to no exercise)</option>
-                <option>Lightly Active (1-3 days/week)</option>
-                <option>Moderately Active (3-5 days/week)</option>
-                <option>Very Active (6-7 days/week)</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label>Fitness Goals</label>
-              <input type="text" class="form-control" name="goals" placeholder="Lose weight, build muscle, etc.">
-            </div>
-            <div class="mb-3">
-              <label>Medical Conditions (Optional)</label>
-              <input type="text" class="form-control" name="conditions">
-            </div>
-            <button class="btn btn-success w-100" type="submit">Analyze Fitness Level</button>
-          </form>
+          {% endif %}
         </div>
       </div>
-
-      <!-- Right: Welcome / Results -->
-      <div class="col-lg-6">
-        {% if result %}
-          <div class="card p-4 mb-3">
-            <h5>Fitness Assessment Results</h5>
-            <p><b>Status:</b> {{ result.status }} <span class="badge bg-success">Score: {{ result.score }}/100</span></p>
-            <div class="score-bar mb-3">
-              <div class="score-bar-fill" style="width: {{ result.score }}%">{{ result.score }}%</div>
-            </div>
-            <p><b>BMI Analysis:</b> Your BMI is {{ result.bmi }}</p>
-          </div>
-
-          <div class="card p-4">
-            <h5>AI Recommendations</h5>
-            <ul>
-              {% for rec in result.recommendations %}
-                <li>{{ rec }}</li>
-              {% endfor %}
-            </ul>
-          </div>
-        {% else %}
-          <div class="card welcome-card">
-            <div class="welcome-img-wrapper">
-              <img src="{{ url_for('static', filename='fitness-placeholder.png') }}" alt="Fitness Placeholder">
-            </div>
-            <h5>Welcome to Your Fitness Dashboard</h5>
-            <p>Fill out the form to analyze your fitness level and get AI-powered recommendations 🚀</p>
-            <p><strong>Stay consistent, stay strong 💪</strong></p>
-          </div>
-        {% endif %}
-      </div>
     </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+  </section>
+{% endblock %}
